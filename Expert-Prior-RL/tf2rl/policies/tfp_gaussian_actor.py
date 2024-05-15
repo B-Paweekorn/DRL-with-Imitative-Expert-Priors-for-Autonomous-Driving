@@ -80,8 +80,6 @@ class ExpertGuidedGaussianActor(tf.keras.Model):
         self._max_action = max_action
         print("hello------")
         print(glob.glob(expert_model+'/ensemble*.h5'))
-        a = load_model('train_results/left_turn/sac/Model/Model_556_1.9601.h5')
-        print("+++++")
         self._expert_ensemble = [load_model(model) for model in glob.glob(expert_model+'/ensemble*.h5')]
         
         print(self._expert_ensemble)

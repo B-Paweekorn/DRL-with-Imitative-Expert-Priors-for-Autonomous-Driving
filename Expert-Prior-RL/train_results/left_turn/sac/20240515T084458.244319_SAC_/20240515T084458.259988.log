@@ -1,8 +1,0 @@
-08:45:04.108 [INFO] (trainer.py:160) Total Episode:     1 Steps:      49 Episode Steps:    49 Return: -0.7469 FPS:  8.38
-08:45:07.933 [INFO] (trainer.py:160) Total Episode:     2 Steps:     235 Episode Steps:   186 Return:  1.9629 FPS: 48.73
-08:45:11.686 [INFO] (trainer.py:160) Total Episode:     3 Steps:     416 Episode Steps:   181 Return: -0.1268 FPS: 48.25
-08:45:12.765 [INFO] (trainer.py:160) Total Episode:     4 Steps:     442 Episode Steps:    26 Return: -0.8039 FPS: 24.11
-08:45:16.986 [INFO] (trainer.py:160) Total Episode:     5 Steps:     648 Episode Steps:   206 Return:  1.9650 FPS: 48.82
-08:45:21.032 [INFO] (trainer.py:160) Total Episode:     6 Steps:     855 Episode Steps:   207 Return:  1.0164 FPS: 51.17
-08:45:25.489 [INFO] (trainer.py:160) Total Episode:     7 Steps:    1074 Episode Steps:   219 Return:  1.0247 FPS: 49.15
-08:45:29.591 [INFO] (trainer.py:160) Total Episode:     8 Steps:    1272 Episode Steps:   198 Return:  1.9589 FPS: 48.28
