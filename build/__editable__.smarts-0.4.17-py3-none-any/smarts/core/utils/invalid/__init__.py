@@ -1,0 +1,1 @@
+/home/nopparuj/Downloads/SMARTS-0.4.17/smarts/core/utils/invalid/__init__.py

@@ -1,0 +1,20 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/realsense2_camera_msgs/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/amr_coco_navigation/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/amr_coco_description/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/amr_coco/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/microros/install/micro_ros_msgs/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/realsense2_camera_msgs/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/amr_coco_navigation/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/amr_coco_description/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/amr_coco/local/lib/python3.10/dist-packages",
+        "/home/nopparuj/microros/install/micro_ros_msgs/local/lib/python3.10/dist-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}

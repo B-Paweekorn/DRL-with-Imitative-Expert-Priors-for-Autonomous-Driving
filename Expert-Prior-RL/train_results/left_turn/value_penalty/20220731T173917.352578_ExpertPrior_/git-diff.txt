@@ -1,0 +1,34 @@
+diff --git a/expert_recording.py b/expert_recording.py
+index d703f3d..2b2309b 100644
+--- a/expert_recording.py
++++ b/expert_recording.py
+@@ -9,7 +9,10 @@ import matplotlib.pyplot as plt
+ from smarts.core.agent_interface import AgentInterface
+ from smarts.core.agent_interface import NeighborhoodVehicles, RGB
+ from smarts.core.controllers import ActionSpaceType
+-from smarts.core.agent import AgentSpec, AgentPolicy
++
++from smarts.core.agent import Agent
++from smarts.zoo.agent_spec import AgentSpec
++
+ from smarts.env.hiway_env import HiWayEnv
+ from pynput.keyboard import Key, Listener
+ 
+@@ -17,7 +20,7 @@ AGENT_ID = "Agent-007"
+ ACTION_SPACE = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
+ OBSERVATION_SPACE = gym.spaces.Box(low=0, high=1, shape=(80, 80, 9))
+ 
+-class HumanKeyboardPolicy(AgentPolicy):
++class HumanKeyboardPolicy(Agent):
+     def __init__(self):
+         # initialize the keyboard listener
+         self.listener = Listener(on_press=self.on_press)
+@@ -69,7 +72,7 @@ def main(args, scenario, num_episodes, seed):
+                     neighborhood_vehicles=NeighborhoodVehicles(radius=60),
+                     rgb=RGB(80, 80, 32/80),
+                     action=ActionSpaceType.LaneWithContinuousSpeed),
+-        policy_builder=HumanKeyboardPolicy,
++        agent_builder=HumanKeyboardPolicy,
+     )
+ 
+     env = HiWayEnv(scenarios=scenario, agent_specs={AGENT_ID: agent_spec}, headless=False, seed=seed)

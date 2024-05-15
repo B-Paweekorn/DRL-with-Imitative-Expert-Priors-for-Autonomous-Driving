@@ -1,0 +1,61 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/rplidar_ros/include/**",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/realsense2_camera/include/**",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/install/realsense2_camera_msgs/include/**",
+        "/home/nopparuj/microros/install/micro_ros_agent/include/**",
+        "/home/nopparuj/microros/install/micro_ros_msgs/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/carver_bringup/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/carver_esp32/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/carver_gps/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/carver_imu/src/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/carver_mqtt/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/ldlidar/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/pointcloud_to_laserscan/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/robot_localization/include/**",
+        "/home/nopparuj/Documents/GitHub/carver_outdoor_ws/src/twist_mux/include/**",
+        "/home/nopparuj/Downloads/librealsense-2.55.1/include/**",
+        "/home/nopparuj/FRA532EXAM_WS/src/robot_localization/include/**",
+        "/home/nopparuj/FRA532EXAM_WS/src/skt_bringup/include/**",
+        "/home/nopparuj/FRA532EXAM_WS/src/skt_description/include/**",
+        "/home/nopparuj/FRA532EXAM_WS/src/uros/micro-ROS-Agent/micro_ros_agent/include/**",
+        "/home/nopparuj/Micro-XRCE-DDS-Agent/include/**",
+        "/home/nopparuj/Mobile_Robots/src/robot_control/include/**",
+        "/home/nopparuj/ROS2_pkg_cpp_py/package_name/include/**",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/src/amr_coco/include/**",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/src/amr_coco_description/include/**",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/src/amr_coco_navigation/include/**",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/src/realsense2/realsense2_camera/include/**",
+        "/home/nopparuj/STM32Workspace/FRA532-Mobile-Robots/src/rplidar_ros2/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/carver_bringup/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/carver_esp32/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/carver_gps/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/carver_imu/src/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/carver_mqtt/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/ldlidar/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/pointcloud_to_laserscan/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/robot_localization/include/**",
+        "/home/nopparuj/carver_outdoor_ws/src/twist_mux/include/**",
+        "/home/nopparuj/librealsense/include/**",
+        "/home/nopparuj/microros/src/uros/micro-ROS-Agent/micro_ros_agent/include/**",
+        "/home/nopparuj/old_FRA501_exam1_6434_6438/src/turtlesim_plus_controller/include/**",
+        "/home/nopparuj/old_FRA501_exam1_6434_6438/src/turtlesim_plus_controller_interface/include/**",
+        "/home/nopparuj/src/uros/micro-ROS-Agent/micro_ros_agent/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

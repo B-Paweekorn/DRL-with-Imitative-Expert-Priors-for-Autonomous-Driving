@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2024-05-12 17:03:32 by Eclipse SUMO duarouter Version 1.20.0
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/duarouterConfiguration.xsd">
+
+    <input>
+        <net-file value="scenarios/behavior_models/uturn/4lane/shifted_map-AUTOGEN.net.xml"/>
+        <route-files value="/tmp/tmph8uobead/trips.trips.xml"/>
+    </input>
+
+    <output>
+        <output-file value="scenarios/behavior_models/uturn/4lane/traffic/basic.rou.xml"/>
+    </output>
+
+    <processing>
+        <unsorted-input value="true"/>
+        <repair value="true"/>
+    </processing>
+
+    <report>
+        <error-log value="/home/nopparuj/.smarts/_duarouter_routing/traffic/basic.log"/>
+        <no-step-log value="true"/>
+    </report>
+
+    <random_number>
+        <seed value="42"/>
+    </random_number>
+
+</configuration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="actor-car--2728725697751114716" minGap="2.50" maxSpeed="8.33" speedFactor="normc(1.00,0.10,0.20,2.00)" vClass="passenger" accel="2.6" decel="4.5" sigma="0.5"/>
+    <vehicle id="car-flow-route-edge-west-EW_0_10-edge-west-EW_0_max-7381503831614581021---8092425259597972526--0-0.0" type="actor-car--2728725697751114716" depart="2.00" departLane="0" departPos="10.00" departSpeed="max" arrivalLane="0" arrivalPos="max">
+        <route edges="edge-west-EW"/>
+    </vehicle>
+</routes>
