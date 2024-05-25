@@ -1,3 +1,0 @@
-08:47:37.751 [INFO] (irl_trainer.py:128) Total Episode:     1 Steps:      47 Episode Steps:    47 Return: -0.7248 FPS: 16.25
-08:47:42.108 [INFO] (irl_trainer.py:128) Total Episode:     2 Steps:     254 Episode Steps:   207 Return:  1.0239 FPS: 47.53
-08:47:46.774 [INFO] (irl_trainer.py:128) Total Episode:     3 Steps:     478 Episode Steps:   224 Return:  1.0206 FPS: 48.01
