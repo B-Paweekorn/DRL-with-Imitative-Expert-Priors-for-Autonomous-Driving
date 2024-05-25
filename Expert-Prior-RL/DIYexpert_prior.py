@@ -1,40 +1,30 @@
 ################################### Imports ###################################
 
 import os
+import sys
 import gym
 import csv
 import time
 import glob
 import random
 import logging
-import argparse
 import numpy as np
+from PIL import Image
 import tensorflow as tf
-import tensorflow_probability as tfp
-
-from time import sleep
-from gym.spaces import Box
-from scipy.stats import norm
-from matplotlib import pyplot as plt
 
 # expert_prior.py
-from tensorflow.keras.layers import Dense, Conv2D, GlobalAveragePooling2D, Concatenate
+from tensorflow.keras.layers import Dense, Conv2D, GlobalAveragePooling2D
 from tf2rl.algos.policy_base import OffPolicyAgent
 from tf2rl.misc.target_update_ops import update_target_variables
 from tf2rl.policies.tfp_gaussian_actor import ExpertGuidedGaussianActor
 
 # tf2rl trainer.py
-from tf2rl.experiments.utils import save_path, frames_to_gif
 from tf2rl.misc.get_replay_buffer import get_replay_buffer
 from tf2rl.misc.prepare_output_dir import prepare_output_dir
 from tf2rl.misc.initialize_logger import initialize_logger
-from tf2rl.envs.normalizer import EmpiricalNormalizer
-from tensorflow.keras.models import load_model
 
 # train.py
 from tf2rl.experiments.trainer import Trainer
-from tf2rl.experiments.on_policy_trainer import OnPolicyTrainer
-from tf2rl.experiments.irl_trainer import IRLTrainer
 from smarts.env.hiway_env import HiWayEnv
 from smarts.core.agent import AgentSpec
 from smarts.core.agent_interface import AgentInterface
@@ -42,6 +32,7 @@ from smarts.core.agent_interface import NeighborhoodVehicles, RGB
 from smarts.core.controllers import ActionSpaceType
 
 ################################## Functions ##################################
+
 
 #### Load expert trajectories ####
 def load_expert_trajectories(filepath):
@@ -54,27 +45,30 @@ def load_expert_trajectories(filepath):
     obses = []
     next_obses = []
     actions = []
-    
-    for trajectory in trajectories:
-        obs = trajectory['obs']
-        action = trajectory['act']
 
-        for i in range(obs.shape[0]-1):
+    for trajectory in trajectories:
+        obs = trajectory["obs"]
+        action = trajectory["act"]
+
+        for i in range(obs.shape[0] - 1):
             obses.append(obs[i])
-            next_obses.append(obs[i+1])
+            next_obses.append(obs[i + 1])
             act = action[i]
-            act[0] += random.normalvariate(0, 0.1) # speed
+            act[0] += random.normalvariate(0, 0.1)  # speed
             act[0] = np.clip(act[0], 0, 10)
-            act[0] = 2.0 * ((act[0] - 0) / (10 - 0)) - 1.0 # normalize speed
-            act[1] += random.normalvariate(0, 0.1) # lane change
+            act[0] = 2.0 * ((act[0] - 0) / (10 - 0)) - 1.0  # normalize speed
+            act[1] += random.normalvariate(0, 0.1)  # lane change
             act[1] = np.clip(act[1], -1, 1)
             actions.append(act)
-    
-    expert_trajs = {'obses': np.array(obses, dtype=np.float32),
-                    'next_obses': np.array(next_obses, dtype=np.float32),
-                    'actions': np.array(actions, dtype=np.float32)}
+
+    expert_trajs = {
+        "obses": np.array(obses, dtype=np.float32),
+        "next_obses": np.array(next_obses, dtype=np.float32),
+        "actions": np.array(actions, dtype=np.float32),
+    }
 
     return expert_trajs
+
 
 # observation space
 def observation_adapter(env_obs):
@@ -90,43 +84,47 @@ def observation_adapter(env_obs):
 
     return np.array(states, dtype=np.float32)
 
+
 # reward function
 def reward_adapter(env_obs, env_reward):
     progress = env_obs.ego_vehicle_state.speed * 0.1
     goal = 1 if env_obs.events.reached_goal else 0
     crash = -1 if env_obs.events.collisions else 0
 
-    if args.algo == 'value_penalty' or args.algo == 'policy_constraint':
+    if args.algo == "value_penalty" or args.algo == "policy_constraint":
         return goal + crash
     else:
         return 0.01 * progress + goal + crash
 
+
 # action space
-def action_adapter(model_action): 
-    speed = model_action[0] # output (-1, 1)
-    speed = (speed - (-1)) * (10 - 0) / (1 - (-1)) # scale to (0, 10)
-    
+def action_adapter(model_action):
+    speed = model_action[0]  # output (-1, 1)
+    speed = (speed - (-1)) * (10 - 0) / (1 - (-1))  # scale to (0, 10)
+
     speed = np.clip(speed, 0, 10)
     model_action[1] = np.clip(model_action[1], -1, 1)
 
     # discretization
-    if model_action[1] < -1/3:
+    if model_action[1] < -1 / 3:
         lane = -1
-    elif model_action[1] > 1/3:
+    elif model_action[1] > 1 / 3:
         lane = 1
     else:
         lane = 0
 
     return (speed, lane)
 
+
 # information
 def info_adapter(observation, reward, info):
     return info
 
+
 ################################# Initialize ##################################
 
 # Discover and use available GPUs
-if tf.config.experimental.list_physical_devices('GPU'):
+if tf.config.experimental.list_physical_devices("GPU"):
     for cur_device in tf.config.experimental.list_physical_devices("GPU"):
         print(cur_device)
         tf.config.experimental.set_memory_growth(cur_device, enable=True)
@@ -134,70 +132,26 @@ if tf.config.experimental.list_physical_devices('GPU'):
 # Environment specs
 ACTION_SPACE = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
 OBSERVATION_SPACE = gym.spaces.Box(low=0, high=1, shape=(80, 80, 9))
-AGENT_ID = 'Agent-007'
+AGENT_ID = "Agent-007"
 states = np.zeros(shape=(80, 80, 9))
 
-# RL training
+# Set arguments
 parser = Trainer.get_argument()
-# parser.add_argument("algo", help="algorithm to run")
-# parser.add_argument("scenario", help="scenario to run")
-# parser.add_argument("--prior", help="path to the expert prior models", default=None)
-parser.add_argument('--max-steps', type=int, default=int(1e6),
-                    help='Maximum number steps to interact with env.')
-parser.add_argument('--episode-max-steps', type=int, default=int(1e3),
-                    help='Maximum steps in an episode')
-parser.add_argument('--n-experiments', type=int, default=1,
-                    help='Number of experiments')
-parser.add_argument('--show-progress', action='store_true',
-                    help='Call `render` in training process')
-parser.add_argument('--save-model-interval', type=int, default=int(5e4),
-                    help='Interval to save model')
-parser.add_argument('--save-summary-interval', type=int, default=int(1e3),
-                    help='Interval to save summary')
-parser.add_argument('--model-dir', type=str, default=None,
-                    help='Directory to restore model')
-parser.add_argument('--dir-suffix', type=str, default='',
-                    help='Suffix for directory that contains results')
-parser.add_argument('--normalize-obs', action='store_true', default=False,
-                    help='Normalize observation')
-parser.add_argument('--logdir', type=str, default='results',
-                    help='Output directory')
-# test settings
-parser.add_argument('--evaluate', action='store_true',
-                    help='Evaluate trained model')
-parser.add_argument('--test-interval', type=int, default=int(20e4),
-                    help='Interval to evaluate trained model')
-parser.add_argument('--show-test-progress', action='store_true',
-                    help='Call `render` in evaluation process')
-parser.add_argument('--test-episodes', type=int, default=20,
-                    help='Number of episodes to evaluate at once')
-parser.add_argument('--save-test-path', action='store_true',
-                    help='Save trajectories of evaluation')
-parser.add_argument('--show-test-images', action='store_true',
-                    help='Show input images to neural networks when an episode finishes')
-parser.add_argument('--save-test-movie', action='store_true',
-                    help='Save rendering results')
-# replay buffer
-parser.add_argument('--use-prioritized-rb', action='store_true',
-                    help='Flag to use prioritized experience replay')
-parser.add_argument('--use-nstep-rb', action='store_true',
-                    help='Flag to use nstep experience replay')
-parser.add_argument('--n-step', type=int, default=4,
-                    help='Number of steps to look over')
-# others
-parser.add_argument('--logging-level', choices=['DEBUG', 'INFO', 'WARNING'],
-                    default='INFO', help='Logging level')
-args = parser.parse_args()
-args.algo = 'value_penalty'
-args.scenario = 'left_turn'
-args.prior = 'expert_model/left_turn_40/'
-args.max_steps = 10e5
-args.save_summary_interval = 128
-args.use_prioritized_rb = False
-args.n_experiments = 10
-args.logdir = f'./train_results/{args.scenario}/{args.algo}'
+if True:
+    # parser.add_argument("algo", help="algorithm to run")
+    # parser.add_argument("scenario", help="scenario to run")
+    # parser.add_argument("--prior", help="path to the expert prior models", default=None)
+    args = parser.parse_args()
+    args.algo = "value_penalty"
+    args.scenario = "left_turn"
+    args.prior = "expert_model/left_turn_40/"
+    args.max_steps = 10e5
+    args.save_summary_interval = 128
+    args.use_prioritized_rb = False
+    args.n_experiments = 10
+    args.logdir = f"./train_results/{args.scenario}/{args.algo}"
 
-scenario_path = ['scenarios/left_turn']
+scenario_path = ["scenarios/left_turn"]
 max_episode_steps = 400
 
 # define agent interface
@@ -205,7 +159,7 @@ agent_interface = AgentInterface(
     max_episode_steps=max_episode_steps,
     waypoints=True,
     neighborhood_vehicles=NeighborhoodVehicles(radius=60),
-    rgb=RGB(80, 80, 32/80),
+    rgb=RGB(80, 80, 32 / 80),
     action=ActionSpaceType.LaneWithContinuousSpeed,
 )
 
@@ -218,26 +172,34 @@ agent_spec = AgentSpec(
     info_adapter=info_adapter,
 )
 
+
 class CriticV(tf.keras.Model):
-    def __init__(self, state_shape, name='vf'):
+    def __init__(self, state_shape, name="vf"):
         super().__init__(name=name)
         # Learn to extract
-        self.conv_layers = [Conv2D(16, 3, strides=3, activation='relu'), Conv2D(64, 3, strides=2, activation='relu'), 
-                            Conv2D(128, 3, strides=2, activation='relu'), Conv2D(256, 3, strides=2, activation='relu'), 
-                            GlobalAveragePooling2D()]
-       
-       # Learn to classifly
-        self.connect_layers = [Dense(128, activation='relu'), Dense(32, activation='relu')]
-        self.out_layer = Dense(1, name="V", activation='linear')
+        self.conv_layers = [
+            Conv2D(16, 3, strides=3, activation="relu"),
+            Conv2D(64, 3, strides=2, activation="relu"),
+            Conv2D(128, 3, strides=2, activation="relu"),
+            Conv2D(256, 3, strides=2, activation="relu"),
+            GlobalAveragePooling2D(),
+        ]
+
+        # Learn to classifly
+        self.connect_layers = [
+            Dense(128, activation="relu"),
+            Dense(32, activation="relu"),
+        ]
+        self.out_layer = Dense(1, name="V", activation="linear")
 
         dummy_state = tf.constant(np.zeros(shape=(1,) + state_shape, dtype=np.float32))
         self(dummy_state)
-        #self.summary()
+        # self.summary()
 
     def call(self, states):
         features = states
         for conv_layer in self.conv_layers:
-            features = conv_layer(features) 
+            features = conv_layer(features)
 
         for connect_layer in self.connect_layers:
             features = connect_layer(features)
@@ -246,22 +208,30 @@ class CriticV(tf.keras.Model):
 
         return tf.squeeze(values, axis=1)
 
+
 class CriticQ(tf.keras.Model):
-    def __init__(self, state_shape, action_dim, name='qf'):
+    def __init__(self, state_shape, action_dim, name="qf"):
         super().__init__(name=name)
 
-        self.conv_layers = [Conv2D(16, 3, strides=3, activation='relu'), Conv2D(64, 3, strides=2, activation='relu'), 
-                            Conv2D(128, 3, strides=2, activation='relu'), Conv2D(256, 3, strides=2, activation='relu'),
-                            GlobalAveragePooling2D()]
-        
-        self.act_layers = [Dense(64, activation='relu')]
-        self.connect_layers = [Dense(128, activation='relu'), Dense(32, activation='relu')]
-        self.out_layer = Dense(1, name="Q", activation='linear')
+        self.conv_layers = [
+            Conv2D(16, 3, strides=3, activation="relu"),
+            Conv2D(64, 3, strides=2, activation="relu"),
+            Conv2D(128, 3, strides=2, activation="relu"),
+            Conv2D(256, 3, strides=2, activation="relu"),
+            GlobalAveragePooling2D(),
+        ]
+
+        self.act_layers = [Dense(64, activation="relu")]
+        self.connect_layers = [
+            Dense(128, activation="relu"),
+            Dense(32, activation="relu"),
+        ]
+        self.out_layer = Dense(1, name="Q", activation="linear")
 
         dummy_state = tf.constant(np.zeros(shape=(1,) + state_shape, dtype=np.float32))
         dummy_action = tf.constant(np.zeros(shape=[1, action_dim], dtype=np.float32))
         self(dummy_state, dummy_action)
-        #self.summary()
+        # self.summary()
 
     def call(self, states, actions):
         features = states
@@ -279,7 +249,9 @@ class CriticQ(tf.keras.Model):
 
         return tf.squeeze(values, axis=1)
 
+
 ############################### Building Agent ################################
+
 
 class ValuePenalty_SmartAgent(OffPolicyAgent):
     def __init__(
@@ -287,9 +259,9 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
         state_shape,
         action_dim,
         prior,
-        uncertainty='ensemble',
+        uncertainty="ensemble",
         name="ValuePenalty",
-        max_action=1.,
+        max_action=1.0,
         lr=3e-4,
         tau=5e-3,
         alpha=0.01,
@@ -297,8 +269,11 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
         auto_alpha=False,
         n_warmup=int(1e4),
         memory_capacity=int(1e6),
-        **kwargs):
-        super().__init__(name=name, memory_capacity=memory_capacity, n_warmup=n_warmup, **kwargs)
+        **kwargs,
+    ):
+        super().__init__(
+            name=name, memory_capacity=memory_capacity, n_warmup=n_warmup, **kwargs
+        )
 
         self._expert_prior = prior
         self._uncertainty = uncertainty
@@ -316,7 +291,9 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
 
     # Initialize actor
     def _setup_actor(self, state_shape, action_dim, lr, max_action=1.0):
-        self.actor = ExpertGuidedGaussianActor(state_shape, action_dim, max_action, self._expert_prior, self._uncertainty)
+        self.actor = ExpertGuidedGaussianActor(
+            state_shape, action_dim, max_action, self._expert_prior, self._uncertainty
+        )
         self.actor_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
 
     # Initialize Q
@@ -337,7 +314,11 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
         assert isinstance(state, np.ndarray)
         is_single_state = len(state.shape) == self.state_ndim
 
-        state = np.expand_dims(state, axis=0).astype(np.float32) if is_single_state else state
+        state = (
+            np.expand_dims(state, axis=0).astype(np.float32)
+            if is_single_state
+            else state
+        )
         action = self._get_action_body(tf.constant(state), test)
 
         return action.numpy()[0] if is_single_state else action
@@ -346,13 +327,26 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
     def _get_action_body(self, state, test):
         actions, log_pis, entropy, std, expert_log_pis, kl = self.actor(state, test)
         return actions
-    
+
     def update(self, states, actions, next_states, rewards, dones, weights=None):
         if weights is None:
             weights = np.ones_like(rewards)
 
-        td_errors, actor_loss, vf_loss, qf_loss, q_value, logp_min, logp_max, logp_mean, entropy_mean, kl_mean, std_mean, std_max, std_min = \
-        self._update_body(states, actions, next_states, rewards, dones, weights)
+        (
+            td_errors,
+            actor_loss,
+            vf_loss,
+            qf_loss,
+            q_value,
+            logp_min,
+            logp_max,
+            logp_mean,
+            entropy_mean,
+            kl_mean,
+            std_mean,
+            std_max,
+            std_min,
+        ) = self._update_body(states, actions, next_states, rewards, dones, weights)
 
         tf.summary.scalar(name=self.policy_name + "/actor_loss", data=actor_loss)
         tf.summary.scalar(name=self.policy_name + "/critic_V_loss", data=vf_loss)
@@ -369,7 +363,7 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
         tf.summary.scalar(name=self.policy_name + "/alpha", data=self.alpha)
 
         return td_errors
-    
+
     @tf.function
     def _update_body(self, states, actions, next_states, rewards, dones, weights):
         with tf.device(self.device):
@@ -386,38 +380,44 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
                 current_q2 = self.qf2(states, actions)
                 next_v_target = self.vf_target(next_states)
 
-                target_q = tf.stop_gradient(rewards + not_dones * self.discount * next_v_target)
+                target_q = tf.stop_gradient(
+                    rewards + not_dones * self.discount * next_v_target
+                )
 
                 td_loss_q1 = tf.reduce_mean((target_q - current_q1) ** 2)
-                td_loss_q2 = tf.reduce_mean((target_q - current_q2) ** 2) 
+                td_loss_q2 = tf.reduce_mean((target_q - current_q2) ** 2)
 
                 # Compute loss of critic V
                 current_v = self.vf(states)
 
-                sample_actions, logp, entropy, std, _, kl = self.actor(states)  # Resample actions to update V
+                sample_actions, logp, entropy, std, _, kl = self.actor(
+                    states
+                )  # Resample actions to update V
                 current_q1 = self.qf1(states, sample_actions)
                 current_q2 = self.qf2(states, sample_actions)
                 current_min_q = tf.minimum(current_q1, current_q2)
 
                 if self.auto_alpha:
-                    target_v = tf.stop_gradient(current_min_q) 
+                    target_v = tf.stop_gradient(current_min_q)
                 else:
-                    target_v = tf.stop_gradient(current_min_q - self.alpha * kl) 
+                    target_v = tf.stop_gradient(current_min_q - self.alpha * kl)
 
                 td_errors = target_v - current_v
-                td_loss_v = tf.reduce_mean(td_errors ** 2)
-
+                td_loss_v = tf.reduce_mean(td_errors**2)
 
                 policy_loss = tf.reduce_mean(self.alpha * kl - current_min_q)
 
-
             # Critic Q1 loss
             q1_grad = tape.gradient(td_loss_q1, self.qf1.trainable_variables)
-            self.qf1_optimizer.apply_gradients(zip(q1_grad, self.qf1.trainable_variables))
+            self.qf1_optimizer.apply_gradients(
+                zip(q1_grad, self.qf1.trainable_variables)
+            )
 
             # Critic Q2 loss
             q2_grad = tape.gradient(td_loss_q2, self.qf2.trainable_variables)
-            self.qf2_optimizer.apply_gradients(zip(q2_grad, self.qf2.trainable_variables))
+            self.qf2_optimizer.apply_gradients(
+                zip(q2_grad, self.qf2.trainable_variables)
+            )
 
             # Critic V loss
             vf_grad = tape.gradient(td_loss_v, self.vf.trainable_variables)
@@ -427,32 +427,51 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
 
             # Actor loss
             actor_grad = tape.gradient(policy_loss, self.actor.trainable_variables)
-            self.actor_optimizer.apply_gradients(zip(actor_grad, self.actor.trainable_variables))
+            self.actor_optimizer.apply_gradients(
+                zip(actor_grad, self.actor.trainable_variables)
+            )
 
             del tape
 
-        return td_errors, policy_loss, td_loss_v, td_loss_q1, tf.reduce_mean(current_min_q), tf.reduce_min(logp), tf.reduce_max(logp), \
-               tf.reduce_mean(logp), tf.reduce_mean(entropy), tf.reduce_mean(kl), tf.reduce_mean(std), tf.reduce_max(std), tf.reduce_min(std)
+        return (
+            td_errors,
+            policy_loss,
+            td_loss_v,
+            td_loss_q1,
+            tf.reduce_mean(current_min_q),
+            tf.reduce_min(logp),
+            tf.reduce_max(logp),
+            tf.reduce_mean(logp),
+            tf.reduce_mean(entropy),
+            tf.reduce_mean(kl),
+            tf.reduce_mean(std),
+            tf.reduce_max(std),
+            tf.reduce_min(std),
+        )
 
     def compute_td_error(self, states, actions, next_states, rewards, dones):
         if isinstance(actions, tf.Tensor):
             rewards = tf.expand_dims(rewards, axis=1)
             dones = tf.expand_dims(dones, 1)
 
-        td_errors = self._compute_td_error_body(states, actions, next_states, rewards, dones)
+        td_errors = self._compute_td_error_body(
+            states, actions, next_states, rewards, dones
+        )
 
         return td_errors.numpy()
 
     @tf.function
     def _compute_td_error_body(self, states, actions, next_states, rewards, dones):
         with tf.device(self.device):
-            not_dones = 1. - tf.cast(dones, dtype=tf.float32)
+            not_dones = 1.0 - tf.cast(dones, dtype=tf.float32)
 
             # Compute TD errors for Q-value func
             current_q1 = self.qf1(states, actions)
             vf_next_target = self.vf_target(next_states)
 
-            target_q = tf.stop_gradient(rewards + not_dones * self.discount * vf_next_target)
+            target_q = tf.stop_gradient(
+                rewards + not_dones * self.discount * vf_next_target
+            )
             td_errors_q1 = tf.math.abs(target_q - current_q1)
 
             # Compute KL errors for policy func
@@ -460,9 +479,12 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
             kl_errors = kl
 
         return td_errors_q1 + kl_errors
-    
+
+
 # Bulding Environment
-env = HiWayEnv(scenarios=scenario_path, agent_specs={AGENT_ID: agent_spec}, headless=True, seed=1)
+env = HiWayEnv(
+    scenarios=scenario_path, agent_specs={AGENT_ID: agent_spec}, headless=True, seed=1
+)
 env.observation_space = OBSERVATION_SPACE
 env.action_space = ACTION_SPACE
 env.agent_id = AGENT_ID
@@ -483,31 +505,35 @@ obs = env.reset()
 obs = obs[env.agent_id]
 
 agent = ValuePenalty_SmartAgent(
-        state_shape=OBSERVATION_SPACE.shape,
-        action_dim=ACTION_SPACE.high.size,
-        max_action=ACTION_SPACE.high[0], 
-        prior=args.prior, auto_alpha=False,
-        alpha=0.002,
-        memory_capacity=int(2e4),
-        batch_size=32,
-        n_warmup=5000
-    )
+    state_shape=OBSERVATION_SPACE.shape,
+    action_dim=ACTION_SPACE.high.size,
+    max_action=ACTION_SPACE.high[0],
+    prior=args.prior,
+    auto_alpha=False,
+    alpha=0.002,
+    memory_capacity=int(2e4),
+    batch_size=32,
+    n_warmup=5000,
+)
 
 replay_buffer = get_replay_buffer(
-        agent, env, args.use_prioritized_rb,
-        args.use_nstep_rb, args.n_step
-    )
+    agent, env, args.use_prioritized_rb, args.use_nstep_rb, args.n_step
+)
 
 # prepare log directory
 _output_dir = prepare_output_dir(
-    args=args, user_specified_dir=args.logdir,
-    suffix="{}_{}".format(agent.policy_name, args.dir_suffix))
+    args=args,
+    user_specified_dir=args.logdir,
+    suffix="{}_{}".format(agent.policy_name, args.dir_suffix),
+)
 
-_episode_max_steps = (args.episode_max_steps if args.episode_max_steps is not None else args.max_steps)
+_episode_max_steps = (
+    args.episode_max_steps if args.episode_max_steps is not None else args.max_steps
+)
 
 logger = initialize_logger(
-logging_level=logging.getLevelName(args.logging_level),
-output_dir=_output_dir)
+    logging_level=logging.getLevelName(args.logging_level), output_dir=_output_dir
+)
 
 # prepare TensorBoard output
 writer = tf.summary.create_file_writer(_output_dir)
@@ -515,7 +541,9 @@ writer.set_as_default()
 
 # Save and restore model
 _checkpoint = tf.train.Checkpoint(policy=agent)
-checkpoint_manager = tf.train.CheckpointManager(_checkpoint, directory=_output_dir, max_to_keep=5)
+checkpoint_manager = tf.train.CheckpointManager(
+    _checkpoint, directory=_output_dir, max_to_keep=5
+)
 model_dir = args.model_dir
 if model_dir is not None:
     assert os.path.isdir(model_dir)
@@ -524,6 +552,7 @@ if model_dir is not None:
     logger.info("Restored {}".format(_latest_path_ckpt))
 
 ############################## Training Function ##############################
+
 
 def evaluate_policy(total_steps):
     tf.summary.experimental.set_step(total_steps)
@@ -537,7 +566,7 @@ def evaluate_policy(total_steps):
         replay_buffer = get_replay_buffer(agent, env, size=_episode_max_steps)
 
     for i in range(args.test_episodes):
-        episode_return = 0.
+        episode_return = 0.0
         obs = env.reset()
         obs = obs[env.agent_id]
         avg_test_steps += 1
@@ -551,18 +580,23 @@ def evaluate_policy(total_steps):
 
             avg_test_steps += 1
             if args.save_test_path:
-                replay_buffer.add(obs=obs, act=action, next_obs=next_obs, rew=reward, done=done)
+                replay_buffer.add(
+                    obs=obs, act=action, next_obs=next_obs, rew=reward, done=done
+                )
 
             episode_return += reward
             obs = next_obs
-            
+
             if done:
                 break
 
-        prefix = "step_{0:08d}_epi_{1:02d}_return_{2:010.4f}".format(total_steps, i, episode_return)
+        prefix = "step_{0:08d}_epi_{1:02d}_return_{2:010.4f}".format(
+            total_steps, i, episode_return
+        )
         avg_test_return += episode_return
 
     return avg_test_return / args.test_episodes, avg_test_steps / args.test_episodes
+
 
 ################################## Training ###################################
 
@@ -574,6 +608,7 @@ while total_steps < args.max_steps:
         action = agent.get_action(obs)
     next_obs, reward, done, info = env.step({env.agent_id: action})
     next_obs = next_obs[env.agent_id]
+
     reward = reward[env.agent_id]
     done = done[env.agent_id]
     info = info[env.agent_id]
@@ -590,40 +625,52 @@ while total_steps < args.max_steps:
 
     # if the episode is finished
     done_flag = done
-    if (hasattr(env, "_max_episode_steps") and
-        episode_steps == env._max_episode_steps):
+    if hasattr(env, "_max_episode_steps") and episode_steps == env._max_episode_steps:
         done_flag = False
 
-    replay_buffer.add(obs=obs, act=action, next_obs=next_obs, rew=reward, done=done_flag)
+    replay_buffer.add(
+        obs=obs, act=action, next_obs=next_obs, rew=reward, done=done_flag
+    )
     obs = next_obs
 
     # add to training log
     if total_steps % 5 == 0:
-        success = np.sum(success_log[-20:]) / 20 
-        with open(_output_dir + '/training_log.csv', 'a', newline='') as csvfile:
+        success = np.sum(success_log[-20:]) / 20
+        with open(_output_dir + "/training_log.csv", "a", newline="") as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow([n_episode, total_steps, episode_returns[n_episode-1] if episode_returns else -1, success, episode_steps])
+            writer.writerow(
+                [
+                    n_episode,
+                    total_steps,
+                    episode_returns[n_episode - 1] if episode_returns else -1,
+                    success,
+                    episode_steps,
+                ]
+            )
 
     # end of a episode
     if done or episode_steps == _episode_max_steps:
         # if task is successful
-        success_log.append(1 if info['env_obs'].events.reached_goal else 0)
+        success_log.append(1 if info["env_obs"].events.reached_goal else 0)
 
         # reset env
         replay_buffer.on_episode_end()
         obs = env.reset()
         obs = obs[env.agent_id]
-        
+
         # display info
         n_episode += 1
         fps = episode_steps / (time.perf_counter() - episode_start_time)
         success = np.sum(success_log[-20:]) / 20
 
-        logger.info("Total Episode: {0: 5} Steps: {1: 7} Episode Steps: {2: 5} Return: {3: 5.4f} FPS: {4:5.2f}".format(
-            n_episode, total_steps, episode_steps, episode_return, fps))
+        logger.info(
+            "Total Episode: {0: 5} Steps: {1: 7} Episode Steps: {2: 5} Return: {3: 5.4f} FPS: {4:5.2f}".format(
+                n_episode, total_steps, episode_steps, episode_return, fps
+            )
+        )
 
         tf.summary.scalar(name="Common/training_return", data=episode_return)
-        tf.summary.scalar(name='Common/training_success', data=success)
+        tf.summary.scalar(name="Common/training_success", data=success)
         tf.summary.scalar(name="Common/training_episode_length", data=episode_steps)
 
         # reset variables
@@ -635,37 +682,54 @@ while total_steps < args.max_steps:
         # save policy model
         if n_episode > 20 and np.mean(episode_returns[-20:]) >= best_train:
             best_train = np.mean(episode_returns[-20:])
-            agent.actor.network.save('{}/Model/Model_{}_{:.4f}.h5'.format(args.logdir, n_episode, best_train))
+            agent.actor.network.save(
+                "{}/Model/Model_{}_{:.4f}.h5".format(args.logdir, n_episode, best_train)
+            )
 
     if total_steps < agent.n_warmup:
         continue
 
     if total_steps % agent.update_interval == 0:
         samples = replay_buffer.sample(agent.batch_size)
-        
+
         with tf.summary.record_if(total_steps % args.save_summary_interval == 0):
             agent.update(
-                samples["obs"], samples["act"], samples["next_obs"],
-                samples["rew"], np.array(samples["done"], dtype=np.float32),
-                None if not args.use_prioritized_rb else samples["weights"])
+                samples["obs"],
+                samples["act"],
+                samples["next_obs"],
+                samples["rew"],
+                np.array(samples["done"], dtype=np.float32),
+                None if not args.use_prioritized_rb else samples["weights"],
+            )
 
         if args.use_prioritized_rb:
             td_error = agent.compute_td_error(
-                samples["obs"], samples["act"], samples["next_obs"],
-                samples["rew"], np.array(samples["done"], dtype=np.float32))
+                samples["obs"],
+                samples["act"],
+                samples["next_obs"],
+                samples["rew"],
+                np.array(samples["done"], dtype=np.float32),
+            )
             replay_buffer.update_priorities(samples["indexes"], np.abs(td_error) + 1e-6)
-            tf.summary.scalar(name=agent.policy_name + "/td_error", data=tf.reduce_mean(td_error))
+            tf.summary.scalar(
+                name=agent.policy_name + "/td_error", data=tf.reduce_mean(td_error)
+            )
 
     if total_steps % args.test_interval == 0:
         avg_test_return, avg_test_steps = evaluate_policy(total_steps)
-        logger.info("Evaluation Total Steps: {0: 7} Average Reward {1: 5.4f} over {2: 2} episodes".format(
-            total_steps, avg_test_return, args.test_episodes))
+        logger.info(
+            "Evaluation Total Steps: {0: 7} Average Reward {1: 5.4f} over {2: 2} episodes".format(
+                total_steps, avg_test_return, args.test_episodes
+            )
+        )
 
         tf.summary.scalar(name="Common/average_test_return", data=avg_test_return)
-        tf.summary.scalar(name="Common/average_test_episode_length", data=avg_test_steps)
+        tf.summary.scalar(
+            name="Common/average_test_episode_length", data=avg_test_steps
+        )
         tf.summary.scalar(name="Common/fps", data=fps)
         writer.flush()
-        
+
         # reset env
         obs = env.reset()
         obs = obs[env.agent_id]
