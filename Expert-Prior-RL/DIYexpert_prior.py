@@ -87,12 +87,15 @@ def observation_adapter(env_obs):
 
 # reward function
 def reward_adapter(env_obs, env_reward):
+    global global_done
+
     progress = env_obs.ego_vehicle_state.speed * 0.1
     goal = 1 if env_obs.events.reached_goal else 0
     crash = -1 if env_obs.events.collisions else 0
-
+    
     if args.algo == "value_penalty" or args.algo == "policy_constraint":
         return goal + crash
+        # return (goal * 6 + crash * 3) - 2 * global_done
     else:
         return 0.01 * progress + goal + crash
 
@@ -135,6 +138,8 @@ OBSERVATION_SPACE = gym.spaces.Box(low=0, high=1, shape=(80, 80, 9))
 AGENT_ID = "Agent-007"
 states = np.zeros(shape=(80, 80, 9))
 
+global_done = 0
+
 # Set arguments
 parser = Trainer.get_argument()
 if True:
@@ -145,7 +150,7 @@ if True:
     args.algo = "value_penalty"
     args.scenario = "left_turn"
     args.prior = "expert_model/left_turn_40/"
-    args.max_steps = 10e5
+    args.max_steps = 10e4
     args.save_summary_interval = 128
     args.use_prioritized_rb = False
     args.n_experiments = 10
@@ -193,7 +198,7 @@ class CriticV(tf.keras.Model):
         self.out_layer = Dense(1, name="V", activation="linear")
 
         dummy_state = tf.constant(np.zeros(shape=(1,) + state_shape, dtype=np.float32))
-        self(dummy_state)
+        self(dummy_state) 
         # self.summary()
 
     def call(self, states):
@@ -262,7 +267,7 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
         uncertainty="ensemble",
         name="ValuePenalty",
         max_action=1.0,
-        lr=3e-4,
+        lr=5e-4,
         tau=5e-3,
         alpha=0.01,
         epsilon=0.5,
@@ -551,52 +556,6 @@ if model_dir is not None:
     _checkpoint.restore(_latest_path_ckpt)
     logger.info("Restored {}".format(_latest_path_ckpt))
 
-############################## Training Function ##############################
-
-
-def evaluate_policy(total_steps):
-    tf.summary.experimental.set_step(total_steps)
-    if args.normalize_obs:
-        env.normalizer.set_params(*env.normalizer.get_params())
-
-    avg_test_return = 0.0
-    avg_test_steps = 0
-
-    if args.save_test_path:
-        replay_buffer = get_replay_buffer(agent, env, size=_episode_max_steps)
-
-    for i in range(args.test_episodes):
-        episode_return = 0.0
-        obs = env.reset()
-        obs = obs[env.agent_id]
-        avg_test_steps += 1
-
-        for _ in range(_episode_max_steps):
-            action = agent.get_action(obs, test=True)
-            next_obs, reward, done, _ = env.step({env.agent_id: action})
-            next_obs = next_obs[env.agent_id]
-            reward = reward[env.agent_id]
-            done = done[env.agent_id]
-
-            avg_test_steps += 1
-            if args.save_test_path:
-                replay_buffer.add(
-                    obs=obs, act=action, next_obs=next_obs, rew=reward, done=done
-                )
-
-            episode_return += reward
-            obs = next_obs
-
-            if done:
-                break
-
-        prefix = "step_{0:08d}_epi_{1:02d}_return_{2:010.4f}".format(
-            total_steps, i, episode_return
-        )
-        avg_test_return += episode_return
-
-    return avg_test_return / args.test_episodes, avg_test_steps / args.test_episodes
-
 
 ################################## Training ###################################
 
@@ -612,6 +571,7 @@ while total_steps < args.max_steps:
     reward = reward[env.agent_id]
     done = done[env.agent_id]
     info = info[env.agent_id]
+    global_done = done
 
     if args.show_progress:
         obs_tensor = tf.expand_dims(obs, axis=0)
@@ -669,6 +629,8 @@ while total_steps < args.max_steps:
             )
         )
 
+        print("rates", success)
+
         tf.summary.scalar(name="Common/training_return", data=episode_return)
         tf.summary.scalar(name="Common/training_success", data=success)
         tf.summary.scalar(name="Common/training_episode_length", data=episode_steps)
@@ -688,7 +650,8 @@ while total_steps < args.max_steps:
 
     if total_steps < agent.n_warmup:
         continue
-
+    
+    # main update
     if total_steps % agent.update_interval == 0:
         samples = replay_buffer.sample(agent.batch_size)
 
@@ -701,41 +664,6 @@ while total_steps < args.max_steps:
                 np.array(samples["done"], dtype=np.float32),
                 None if not args.use_prioritized_rb else samples["weights"],
             )
-
-        if args.use_prioritized_rb:
-            td_error = agent.compute_td_error(
-                samples["obs"],
-                samples["act"],
-                samples["next_obs"],
-                samples["rew"],
-                np.array(samples["done"], dtype=np.float32),
-            )
-            replay_buffer.update_priorities(samples["indexes"], np.abs(td_error) + 1e-6)
-            tf.summary.scalar(
-                name=agent.policy_name + "/td_error", data=tf.reduce_mean(td_error)
-            )
-
-    if total_steps % args.test_interval == 0:
-        avg_test_return, avg_test_steps = evaluate_policy(total_steps)
-        logger.info(
-            "Evaluation Total Steps: {0: 7} Average Reward {1: 5.4f} over {2: 2} episodes".format(
-                total_steps, avg_test_return, args.test_episodes
-            )
-        )
-
-        tf.summary.scalar(name="Common/average_test_return", data=avg_test_return)
-        tf.summary.scalar(
-            name="Common/average_test_episode_length", data=avg_test_steps
-        )
-        tf.summary.scalar(name="Common/fps", data=fps)
-        writer.flush()
-
-        # reset env
-        obs = env.reset()
-        obs = obs[env.agent_id]
-        episode_steps = 0
-        episode_return = 0
-        episode_start_time = time.perf_counter()
 
     # save checkpoint
     if total_steps % args.save_model_interval == 0:
