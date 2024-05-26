@@ -105,8 +105,12 @@ The recorded expert demo files are Numpy zipped archive, each of them contains t
     - Data: 3x RGB images (80x80x3) at `t`, `t-1`, and `t-2` timesteps.
     - The value for each pixel color is within range of [0, 1].
 
+      ![observation](https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/3a443b5a-39a0-4f89-a69b-0f3269c4ad44)
+
 ### 2. Imitation Learning
 The imitation learning is used to learn the imitative expert policy. The expert data is used to train the model to predict the expert's actions given the expert's observations.
+
+![imitation learining](https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/4876b383-26dc-4bd4-b3fa-db1f346485c2)
 
 - The model is a convolutional neural network with 4 convolutional layers and 2 dense layers.
 - The observation-action pairs are used to train the model.
