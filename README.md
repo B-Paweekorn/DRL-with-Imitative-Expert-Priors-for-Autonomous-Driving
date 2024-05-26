@@ -224,10 +224,9 @@ In this section, we will focus on training the RL agent using the imitative expe
 
   ```python
   goal = 1 if env_obs.events.reached_goal else 0
-  crash = -1 if env_obs.events.collisions else 0
+  crash = -5 if env_obs.events.collisions else 0
 
-  # reward = goal + crash
-  reward = goal + (5 * crash)
+  reward = goal + crash
   ```
 
 ## Result
