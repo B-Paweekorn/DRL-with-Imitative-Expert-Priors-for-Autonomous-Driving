@@ -91,7 +91,7 @@ def reward_adapter(env_obs, env_reward):
 
     progress = env_obs.ego_vehicle_state.speed * 0.1
     goal = 1 if env_obs.events.reached_goal else 0
-    crash = -1 if env_obs.events.collisions else 0
+    crash = -5 if env_obs.events.collisions else 0
     
     if args.algo == "value_penalty" or args.algo == "policy_constraint":
         return goal + crash
