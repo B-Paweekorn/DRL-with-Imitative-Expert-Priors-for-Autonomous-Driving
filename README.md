@@ -114,273 +114,98 @@ The imitation learning is used to learn the imitative expert policy. The expert 
 ### 3. RL Training
 
 In this section, we will focus on training the RL agent using the imitative expert priors. The training will involve initializing the environment, defining the RL agent, setting up the replay buffer, and running the training loop.
-#### 3.1 Setting Up the Environment
 
-First, we'll set up the environment using the HiWayEnv class from the SMARTS library.
- ```bash
-# observation space
-def observation_adapter(env_obs):
-    global states
+#### 1. Setting Up the Environment
 
-    new_obs = env_obs.top_down_rgb[1] / 255.0
-    states[:, :, 0:3] = states[:, :, 3:6]
-    states[:, :, 3:6] = states[:, :, 6:9]
-    states[:, :, 6:9] = new_obs
+1. **Observation Space:**
+   - Function: `observation_adapter(env_obs)`
+   - Steps:
+     1. Normalize new observation.
+     2. Update the observation history.
+     3. Check for collisions or goal completion:
+        - If true, reset states.
+     4. Return the updated states.
 
-    if env_obs.events.collisions or env_obs.events.reached_goal:
-        states = np.zeros(shape=(80, 80, 9))
+2. **Reward Function:**
+   - Function: `reward_adapter(env_obs, env_reward)`
+   - Steps:
+     1. Calculate progress reward based on speed.
+     2. Check if goal is reached.
+     3. Check for collisions.
+     4. Return rewards based on algorithm type.
 
-    return np.array(states, dtype=np.float32)
+3. **Action Space:**
+   - Function: `action_adapter(model_action)`
+   - Steps:
+     1. Scale speed to the range (0, 10).
+     2. Clip speed and lane values.
+     3. Discretize lane changes.
+     4. Return the adjusted action.
 
+#### 2. Agent
 
-# reward function
-def reward_adapter(env_obs, env_reward):
-    global global_done
+1. **Agent Initialization:**
+   - Class: `ValuePenalty_SmartAgent`
+   - Constructor Parameters: `state_shape`, `action_dim`, `prior`, etc.
+   - Steps:
+     1. Call superclass constructor.
+     2. Set up actor, critic V, and critic Q.
+     3. Set hyper-parameters.
 
-    progress = env_obs.ego_vehicle_state.speed * 0.1
-    goal = 1 if env_obs.events.reached_goal else 0
-    crash = -1 if env_obs.events.collisions else 0
-    
-    if args.algo == "value_penalty" or args.algo == "policy_constraint":
-        return goal + crash
-        # return (goal * 6 + crash * 3) - 2 * global_done
-    else:
-        return 0.01 * progress + goal + crash
+2. **Setup Actor:**
+   - Function: `_setup_actor(state_shape, action_dim, lr, max_action)`
+   - Steps:
+     1. Initialize `ExpertGuidedGaussianActor`.
+     2. Set up actor optimizer.
 
+3. **Setup Critic Q:**
+   - Function: `_setup_critic_q(state_shape, action_dim, lr)`
+   - Steps:
+     1. Initialize `CriticQ` for Q1 and Q2.
+     2. Set up optimizers for Q1 and Q2.
 
-# action space
-def action_adapter(model_action):
-    speed = model_action[0]  # output (-1, 1)
-    speed = (speed - (-1)) * (10 - 0) / (1 - (-1))  # scale to (0, 10)
+4. **Setup Critic V:**
+   - Function: `_setup_critic_v(state_shape, lr)`
+   - Steps:
+     1. Initialize `CriticV` and its target.
+     2. Update target weights.
+     3. Set up V optimizer.
 
-    speed = np.clip(speed, 0, 10)
-    model_action[1] = np.clip(model_action[1], -1, 1)
+5. **Get Action:**
+   - Function: `get_action(state, test=False)`
+   - Steps:
+     1. Check if state is single or batch.
+     2. Expand dimensions if necessary.
+     3. Get action using `_get_action_body`.
+     4. Return action.
 
-    # discretization
-    if model_action[1] < -1 / 3:
-        lane = -1
-    elif model_action[1] > 1 / 3:
-        lane = 1
-    else:
-        lane = 0
+6. **Update Agent:**
+   - Function: `update(states, actions, next_states, rewards, dones, weights=None)`
+   - Steps:
+     1. If weights are `None`, set default weights.
+     2. Call `_update_body` to perform the update.
+     3. Return TD errors.
 
-    return (speed, lane)
-```
-#### 3.2 Agent
- ```bash
-class ValuePenalty_SmartAgent(OffPolicyAgent):
-    def __init__(
-        self,
-        state_shape,
-        action_dim,
-        prior,
-        uncertainty="ensemble",
-        name="ValuePenalty",
-        max_action=1.0,
-        lr=5e-4,
-        tau=5e-3,
-        alpha=0.01,
-        epsilon=0.5,
-        auto_alpha=False,
-        n_warmup=int(1e4),
-        memory_capacity=int(1e6),
-        **kwargs,
-    ):
-        super().__init__(
-            name=name, memory_capacity=memory_capacity, n_warmup=n_warmup, **kwargs
-        )
+7. **Update Body:**
+   - Function: `_update_body(states, actions, next_states, rewards, dones, weights)`
+   - Steps:
+     1. Ensure correct shape of rewards and dones.
+     2. Compute losses for critic Q, critic V, and actor.
+     3. Apply gradients for each loss.
+     4. Update target V.
+     5. Return update metrics.
 
-        self._expert_prior = prior
-        self._uncertainty = uncertainty
-        self._setup_actor(state_shape, action_dim, lr, max_action)
-        self._setup_critic_v(state_shape, lr)
-        self._setup_critic_q(state_shape, action_dim, lr)
+#### 3. Training
 
-        # Set hyper-parameters
-        self.tau = tau
-        self.auto_alpha = auto_alpha
-        self.epsilon = epsilon
-        self.alpha = alpha
-
-        self.state_ndim = len(state_shape)
-
-    # Initialize actor
-    def _setup_actor(self, state_shape, action_dim, lr, max_action=1.0):
-        self.actor = ExpertGuidedGaussianActor(
-            state_shape, action_dim, max_action, self._expert_prior, self._uncertainty
-        )
-        self.actor_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-
-    # Initialize Q
-    def _setup_critic_q(self, state_shape, action_dim, lr):
-        self.qf1 = CriticQ(state_shape, action_dim, name="qf1")
-        self.qf2 = CriticQ(state_shape, action_dim, name="qf2")
-        self.qf1_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-        self.qf2_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-
-    # Initialize V
-    def _setup_critic_v(self, state_shape, lr):
-        self.vf = CriticV(state_shape)
-        self.vf_target = CriticV(state_shape)
-        update_target_variables(self.vf_target.weights, self.vf.weights, tau=1.0)
-        self.vf_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-
-    def get_action(self, state, test=False):
-        assert isinstance(state, np.ndarray)
-        is_single_state = len(state.shape) == self.state_ndim
-
-        state = (
-            np.expand_dims(state, axis=0).astype(np.float32)
-            if is_single_state
-            else state
-        )
-        action = self._get_action_body(tf.constant(state), test)
-
-        return action.numpy()[0] if is_single_state else action
-
-    @tf.function
-    def _get_action_body(self, state, test):
-        actions, log_pis, entropy, std, expert_log_pis, kl = self.actor(state, test)
-        return actions
-
-    def update(self, states, actions, next_states, rewards, dones, weights=None):
-        if weights is None:
-            weights = np.ones_like(rewards)
-
-        (
-            td_errors,
-            actor_loss,
-            vf_loss,
-            qf_loss,
-            q_value,
-            logp_min,
-            logp_max,
-            logp_mean,
-            entropy_mean,
-            kl_mean,
-            std_mean,
-            std_max,
-            std_min,
-        ) = self._update_body(states, actions, next_states, rewards, dones, weights)
-
-        return td_errors
-
-    @tf.function
-    def _update_body(self, states, actions, next_states, rewards, dones, weights):
-        with tf.device(self.device):
-            assert len(dones.shape) == 2
-            assert len(rewards.shape) == 2
-            rewards = tf.squeeze(rewards, axis=1)
-            dones = tf.squeeze(dones, axis=1)
-
-            not_dones = 1.0 - tf.cast(dones, dtype=tf.float32)
-
-            with tf.GradientTape(persistent=True) as tape:
-                # Compute loss of critic Q
-                current_q1 = self.qf1(states, actions)
-                current_q2 = self.qf2(states, actions)
-                next_v_target = self.vf_target(next_states)
-
-                target_q = tf.stop_gradient(
-                    rewards + not_dones * self.discount * next_v_target
-                )
-
-                td_loss_q1 = tf.reduce_mean((target_q - current_q1) ** 2)
-                td_loss_q2 = tf.reduce_mean((target_q - current_q2) ** 2)
-
-                # Compute loss of critic V
-                current_v = self.vf(states)
-
-                sample_actions, logp, entropy, std, _, kl = self.actor(
-                    states
-                )  # Resample actions to update V
-                current_q1 = self.qf1(states, sample_actions)
-                current_q2 = self.qf2(states, sample_actions)
-                current_min_q = tf.minimum(current_q1, current_q2)
-
-                if self.auto_alpha:
-                    target_v = tf.stop_gradient(current_min_q)
-                else:
-                    target_v = tf.stop_gradient(current_min_q - self.alpha * kl)
-
-                td_errors = target_v - current_v
-                td_loss_v = tf.reduce_mean(td_errors**2)
-
-                policy_loss = tf.reduce_mean(self.alpha * kl - current_min_q)
-
-            # Critic Q1 loss
-            q1_grad = tape.gradient(td_loss_q1, self.qf1.trainable_variables)
-            self.qf1_optimizer.apply_gradients(
-                zip(q1_grad, self.qf1.trainable_variables)
-            )
-
-            # Critic Q2 loss
-            q2_grad = tape.gradient(td_loss_q2, self.qf2.trainable_variables)
-            self.qf2_optimizer.apply_gradients(
-                zip(q2_grad, self.qf2.trainable_variables)
-            )
-
-            # Critic V loss
-            vf_grad = tape.gradient(td_loss_v, self.vf.trainable_variables)
-            self.vf_optimizer.apply_gradients(zip(vf_grad, self.vf.trainable_variables))
-            # Update Target V
-            update_target_variables(self.vf_target.weights, self.vf.weights, self.tau)
-
-            # Actor loss
-            actor_grad = tape.gradient(policy_loss, self.actor.trainable_variables)
-            self.actor_optimizer.apply_gradients(
-                zip(actor_grad, self.actor.trainable_variables)
-            )
-
-            del tape
-
-        return (
-            td_errors,
-            policy_loss,
-            td_loss_v,
-            td_loss_q1,
-            tf.reduce_mean(current_min_q),
-            tf.reduce_min(logp),
-            tf.reduce_max(logp),
-            tf.reduce_mean(logp),
-            tf.reduce_mean(entropy),
-            tf.reduce_mean(kl),
-            tf.reduce_mean(std),
-            tf.reduce_max(std),
-            tf.reduce_min(std),
-        )
-```
-#### 3.3 Training
-while total_steps < args.max_steps:
-    # print(n_episode)
-    if total_steps < agent.n_warmup:
-        action = env.action_space.sample()
-    else:
-        action = agent.get_action(obs)
-    next_obs, reward, done, info = env.step({env.agent_id: action})
-    next_obs = next_obs[env.agent_id]
-
-    reward = reward[env.agent_id]
-    done = done[env.agent_id]
-    info = info[env.agent_id]
-    global_done = done
-
-    episode_steps += 1
-    episode_return += reward
-    total_steps += 1
-
-    obs = next_obs
-
-    if total_steps % agent.update_interval == 0:
-        samples = replay_buffer.sample(agent.batch_size)
-
-        with tf.summary.record_if(total_steps % args.save_summary_interval == 0):
-            agent.update(
-                samples["obs"],
-                samples["act"],
-                samples["next_obs"],
-                samples["rew"],
-                np.array(samples["done"], dtype=np.float32),
-                None if not args.use_prioritized_rb else samples["weights"],
-            )
-   
+1. Initialize `total_steps`, `episode_steps`, `episode_return`, and `global_done`.
+2. Loop until `total_steps` < `args.max_steps`:
+   - If `total_steps` < `agent.n_warmup`:
+     - Sample random action from action space.
+   - Else:
+     - Get action from the agent.
+   - Perform environment step with the action.
+   - Update `obs`, `reward`, `done`, `info`, and `global_done`.
+   - Increment `episode_steps`, `episode_return`, and `total_steps`.
+   - If `total_steps` % `agent.update_interval` == 0:
+     - Sample from replay buffer.
+     - Update agent with sampled data.
