@@ -93,23 +93,23 @@
 ### 1. Expert Recording
 The recorded expert demo files are Numpy zipped archive, each of them contains two Numpy arrays: a series of the expert's actions and a series of the expert's observations.
 
-    - **Action**
-        - Array size: (timesteps, 2)
-        - Data: [`target_speed`, `lane_change`]
-        - `target_speed` is the desired speed of the vehicle within range [0, 10] m/s normalized to [-1, 1].
-        - `lane_change` is the desired lane change direction within range of [-1, 1]. The value of -1 indicates the left lane, 0 indicates lane keeping, and 1 indicates the right lane.
-        - Lane following controller is used to control the vehicle's steering.
+- **Action**
+    - Array size: (timesteps, 2)
+    - Data: [`target_speed`, `lane_change`]
+    - `target_speed` is the desired speed of the vehicle within range [0, 10] m/s normalized to [-1, 1].
+    - `lane_change` is the desired lane change direction within range of [-1, 1]. The value of -1 indicates the left lane, 0 indicates lane keeping, and 1 indicates the right lane.
+    - Lane following controller is used to control the vehicle's steering.
 
-    - **Observation**
-        - Array size: (timesteps, 80, 80, 9)
-        - Data: 3x RGB images (80x80x3) at `t`, `t-1`, and `t-2` timesteps.
-        - The value for each pixel color is within range of [0, 1].
+- **Observation**
+    - Array size: (timesteps, 80, 80, 9)
+    - Data: 3x RGB images (80x80x3) at `t`, `t-1`, and `t-2` timesteps.
+    - The value for each pixel color is within range of [0, 1].
 
 ### 2. Imitation Learning
 The imitation learning is used to learn the imitative expert policy. The expert data is used to train the model to predict the expert's actions given the expert's observations.
 
-    - The model is a convolutional neural network with 4 convolutional layers and 2 dense layers.
-    - The observation-action pairs are used to train the model.
+- The model is a convolutional neural network with 4 convolutional layers and 2 dense layers.
+- The observation-action pairs are used to train the model.
 
 ### 3. RL Training
 
@@ -209,3 +209,19 @@ In this section, we will focus on training the RL agent using the imitative expe
    - If `total_steps` % `agent.update_interval` == 0:
      - Sample from replay buffer.
      - Update agent with sampled data.
+
+## Reward Function Design
+
+- **Value Penalty**
+
+  The reward function for Value Penalty was adjusted so crashing is more significant.
+
+  ```python
+  goal = 1 if env_obs.events.reached_goal else 0
+  crash = -1 if env_obs.events.collisions else 0
+
+  # reward = goal + crash
+  reward = goal + (5 * crash)
+  ```
+
+## Result
