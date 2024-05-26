@@ -1,0 +1,5 @@
+18:45:25.007 [INFO] (DIYexpert_prior.py:628) Total Episode:     1 Steps:      28 Episode Steps:    28 Return: -1.0000 FPS:  4.70
+18:45:26.209 [INFO] (DIYexpert_prior.py:628) Total Episode:     2 Steps:      56 Episode Steps:    28 Return: -1.0000 FPS: 23.33
+18:45:27.283 [INFO] (DIYexpert_prior.py:628) Total Episode:     3 Steps:      84 Episode Steps:    28 Return: -1.0000 FPS: 26.09
+18:45:30.843 [INFO] (DIYexpert_prior.py:628) Total Episode:     4 Steps:     265 Episode Steps:   181 Return:  1.0000 FPS: 50.86
+18:45:32.183 [INFO] (DIYexpert_prior.py:628) Total Episode:     5 Steps:     307 Episode Steps:    42 Return: -1.0000 FPS: 31.50

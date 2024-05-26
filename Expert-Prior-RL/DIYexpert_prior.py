@@ -454,36 +454,6 @@ class ValuePenalty_SmartAgent(OffPolicyAgent):
             tf.reduce_min(std),
         )
 
-    def compute_td_error(self, states, actions, next_states, rewards, dones):
-        if isinstance(actions, tf.Tensor):
-            rewards = tf.expand_dims(rewards, axis=1)
-            dones = tf.expand_dims(dones, 1)
-
-        td_errors = self._compute_td_error_body(
-            states, actions, next_states, rewards, dones
-        )
-
-        return td_errors.numpy()
-
-    @tf.function
-    def _compute_td_error_body(self, states, actions, next_states, rewards, dones):
-        with tf.device(self.device):
-            not_dones = 1.0 - tf.cast(dones, dtype=tf.float32)
-
-            # Compute TD errors for Q-value func
-            current_q1 = self.qf1(states, actions)
-            vf_next_target = self.vf_target(next_states)
-
-            target_q = tf.stop_gradient(
-                rewards + not_dones * self.discount * vf_next_target
-            )
-            td_errors_q1 = tf.math.abs(target_q - current_q1)
-
-            # Compute KL errors for policy func
-            sample_actions, logp, entropy, std, expert_logp, kl = self.actor(states)
-            kl_errors = kl
-
-        return td_errors_q1 + kl_errors
 
 
 # Bulding Environment
