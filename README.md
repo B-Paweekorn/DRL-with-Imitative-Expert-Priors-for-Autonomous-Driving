@@ -77,7 +77,9 @@
 3. Train RL agent. The available algorithms are sac, value_penalty, policy_constraint, ppo, gail.
 
     ```bash
-    python train.py value_penalty left_turn --prior expert_model/left_turn_40
+    python DIYexpert_prior.py
+    or
+    python train.py sac left_turn --prior expert_model/left_turn_40
     ```
 
 4. Evaluate the trained RL agent. Specify the algorithm and the preferred model to evaluate.
