@@ -233,6 +233,8 @@ In this section, we will focus on training the RL agent using the imitative expe
 
 ![training result](https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/bc84c655-f18e-4f0b-abe0-9d7b04a29bc8)
 
+Our Value penalty perform the best because it is more careful around other cars as the negative reward for crashing is more significant than others. This results in higher success rate and average time taken per episode.
+
 | **algorithm**     | **success rate** | **average time** | **std** |
 |-------------------|------------------|------------------|---------|
 | **SAC**           | 64.0%            | 11.81 s          | 1.02 s  |
@@ -242,3 +244,7 @@ In this section, we will focus on training the RL agent using the imitative expe
 | Our Value Penalty | Value Penalty | Soft Actor-Critic |
 | --- | --- | --- |
 | <video src="https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/651c950d-7b64-418d-955b-e60730500267"> | <video src="https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/f56c4a9a-98f6-4c78-b82a-3317ab204270"> | <video src="https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/50b53796-e941-4313-8b87-eddb7b62d2c0"> |
+
+### Conclusion
+
+Even with 96% success rate, this RL model still isn't ideal for real world use. 96% success rate means 4% failure, that is 4 crashes every 100 turns.
