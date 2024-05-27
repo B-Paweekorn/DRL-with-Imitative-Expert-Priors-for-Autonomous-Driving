@@ -230,3 +230,9 @@ In this section, we will focus on training the RL agent using the imitative expe
   ```
 
 ## Result
+
+![training result](https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/bc84c655-f18e-4f0b-abe0-9d7b04a29bc8)
+
+| Our Value Penalty                                                                                                                           | Value Penalty                                                                                                                               | Soft Actor-Critic                                                                                                                           |
+|---------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| <video src="https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/651c950d-7b64-418d-955b-e60730500267"> | <video src="https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/f56c4a9a-98f6-4c78-b82a-3317ab204270"> | <video src="https://github.com/B-Paweekorn/DRL-with-Imitative-Expert-Priors-for-Autonomous-Driving/assets/47713359/50b53796-e941-4313-8b87-eddb7b62d2c0"> |
